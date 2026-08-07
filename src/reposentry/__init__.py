@@ -1,2 +1,3 @@
-def main() -> None:
-    print("Hello from reposentry!")
+"""RepoSentry package."""
+
+__version__ = "0.1.0"

@@ -1,17 +1,67 @@
 [project]
 name = "reposentry"
 version = "0.1.0"
-description = "Add your description here"
+description = "A Python service that analyzes GitHub repository health and generates actionable engineering reports."
 readme = "README.md"
 authors = [
-    { name = "EmmaTsak", email = "136719701+EmmaTsak@users.noreply.github.com" }
+    { name = "EmmaTsak", email = "tsakalidouemmanouela@gmail.com" }
 ]
 requires-python = ">=3.14"
-dependencies = []
+dependencies = [
+    "fastapi[standard]>=0.141.1",
+    "httpx>=0.28.1",
+    "pydantic-settings>=2.14.2",
+    "rich>=15.0.0",
+    "typer>=0.27.0",
+]
 
 [project.scripts]
-reposentry = "reposentry:main"
+reposentry = "reposentry.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.10.10,<0.11.0"]
 build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "mypy>=2.3.0",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
+    "respx>=0.23.1",
+    "ruff>=0.16.1",
+]
+
+[tool.ruff]
+target-version = "py314"
+line-length = 88
+
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle errors
+    "F",     # Pyflakes
+    "I",     # import sorting
+    "B",     # bugbear
+    "UP",    # Python upgrades
+    "SIM",   # simplifications
+    "RUF",   # Ruff-specific rules
+]
+ignore = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+files = ["src", "tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "-ra",
+]
