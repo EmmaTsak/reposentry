@@ -104,3 +104,69 @@ def test_detects_stale_issues_and_pull_requests() -> None:
 
     assert len(stale_pull_requests) == 1
     assert stale_pull_requests[0].number == 3
+
+
+def test_health_score_includes_explainable_deductions() -> None:
+    now = datetime(2026, 10, 13, tzinfo=UTC)
+
+    repository = Repository(
+        id=123,
+        name="reposentry",
+        full_name="EmmaTsak/reposentry",
+        description="Repository health analyzer",
+        html_url="https://github.com/EmmaTsak/reposentry",
+        language="Python",
+        stargazers_count=5,
+        forks_count=1,
+        default_branch="main",
+        created_at=now - timedelta(days=200),
+        updated_at=now - timedelta(days=40),
+        pushed_at=now - timedelta(days=40),
+    )
+
+    user = GitHubUser(
+        login="EmmaTsak",
+        html_url="https://github.com/EmmaTsak",
+    )
+
+    stale_issue = Issue(
+        number=1,
+        title="Old issue",
+        html_url="https://github.com/EmmaTsak/reposentry/issues/1",
+        state="open",
+        user=user,
+        created_at=now - timedelta(days=60),
+        updated_at=now - timedelta(days=40),
+    )
+
+    stale_pull_request = PullRequest(
+        number=2,
+        title="Old pull request",
+        html_url="https://github.com/EmmaTsak/reposentry/pull/2",
+        state="open",
+        user=user,
+        draft=False,
+        created_at=now - timedelta(days=30),
+        updated_at=now - timedelta(days=20),
+    )
+
+    scan = RepositoryScan(
+        repository=repository,
+        issues=[stale_issue],
+        pull_requests=[stale_pull_request],
+    )
+
+    analyzer = RepositoryHealthAnalyzer(
+        stale_issue_days=30,
+        stale_pull_request_days=14,
+    )
+
+    report = analyzer.analyze(
+        scan,
+        now=now,
+    )
+
+    assert report.score == 82
+    assert report.stale_issue_count == 1
+    assert report.stale_pull_request_count == 1
+    assert len(report.deductions) == 3

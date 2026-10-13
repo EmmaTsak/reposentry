@@ -1,5 +1,9 @@
 from datetime import UTC, datetime, timedelta
 
+from reposentry.models.health_report import (
+    HealthDeduction,
+    RepositoryHealthReport,
+)
 from reposentry.models.issue import Issue
 from reposentry.models.pull_request import PullRequest
 from reposentry.models.scan import RepositoryScan
@@ -43,3 +47,79 @@ class RepositoryHealthAnalyzer:
             for pull_request in scan.pull_requests
             if pull_request.updated_at < cutoff
         ]
+
+    def analyze(
+        self,
+        scan: RepositoryScan,
+        now: datetime | None = None,
+    ) -> RepositoryHealthReport:
+        """Calculate an explainable repository health score."""
+
+        current_time = now or datetime.now(UTC)
+
+        stale_issues = self.get_stale_issues(
+            scan,
+            now=current_time,
+        )
+
+        stale_pull_requests = self.get_stale_pull_requests(
+            scan,
+            now=current_time,
+        )
+
+        score = 100
+        deductions: list[HealthDeduction] = []
+
+        if stale_issues:
+            points = len(stale_issues) * 3
+            score -= points
+
+            deductions.append(
+                HealthDeduction(
+                    reason=f"{len(stale_issues)} stale issue(s)",
+                    points=points,
+                )
+            )
+
+        if stale_pull_requests:
+            points = len(stale_pull_requests) * 5
+            score -= points
+
+            deductions.append(
+                HealthDeduction(
+                    reason=(f"{len(stale_pull_requests)} stale pull request(s)"),
+                    points=points,
+                )
+            )
+
+        if scan.repository.pushed_at is not None:
+            inactive_days = (current_time - scan.repository.pushed_at).days
+
+            if inactive_days > 90:
+                score -= 20
+
+                deductions.append(
+                    HealthDeduction(
+                        reason="Repository inactive for over 90 days",
+                        points=20,
+                    )
+                )
+
+            elif inactive_days > 30:
+                score -= 10
+
+                deductions.append(
+                    HealthDeduction(
+                        reason="Repository inactive for over 30 days",
+                        points=10,
+                    )
+                )
+
+        score = max(0, min(score, 100))
+
+        return RepositoryHealthReport(
+            score=score,
+            stale_issue_count=len(stale_issues),
+            stale_pull_request_count=len(stale_pull_requests),
+            deductions=deductions,
+        )
