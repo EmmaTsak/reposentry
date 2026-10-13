@@ -155,3 +155,78 @@ async def test_get_issues_repository_not_found() -> None:
             "EmmaTsak",
             "missing",
         )
+
+
+@respx.mock
+async def test_get_pull_requests() -> None:
+    response_data = [
+        {
+            "number": 15,
+            "title": "Add repository health scoring",
+            "html_url": "https://github.com/EmmaTsak/reposentry/pull/15",
+            "state": "open",
+            "user": {
+                "login": "EmmaTsak",
+                "html_url": "https://github.com/EmmaTsak",
+            },
+            "draft": False,
+            "created_at": "2026-10-05T10:00:00Z",
+            "updated_at": "2026-10-12T14:30:00Z",
+            "closed_at": None,
+            "merged_at": None,
+        }
+    ]
+
+    respx.get(
+        "https://api.github.com/repos/EmmaTsak/reposentry/pulls",
+        params={
+            "state": "open",
+            "per_page": 100,
+        },
+    ).mock(
+        return_value=httpx.Response(
+            200,
+            json=response_data,
+        )
+    )
+
+    settings = Settings(github_token=None)
+    client = GitHubClient(settings)
+
+    pull_requests = await client.get_pull_requests(
+        "EmmaTsak",
+        "reposentry",
+    )
+
+    assert len(pull_requests) == 1
+    assert pull_requests[0].number == 15
+    assert pull_requests[0].title == "Add repository health scoring"
+    assert pull_requests[0].draft is False
+
+
+@respx.mock
+async def test_get_pull_requests_repository_not_found() -> None:
+    respx.get(
+        "https://api.github.com/repos/EmmaTsak/missing/pulls",
+        params={
+            "state": "open",
+            "per_page": 100,
+        },
+    ).mock(
+        return_value=httpx.Response(
+            404,
+            json={"message": "Not Found"},
+        )
+    )
+
+    settings = Settings(github_token=None)
+    client = GitHubClient(settings)
+
+    with pytest.raises(
+        RepositoryNotFoundError,
+        match="EmmaTsak/missing",
+    ):
+        await client.get_pull_requests(
+            "EmmaTsak",
+            "missing",
+        )
