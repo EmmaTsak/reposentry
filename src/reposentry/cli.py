@@ -11,7 +11,10 @@ from reposentry.clients.github import (
     RepositoryNotFoundError,
 )
 from reposentry.config import Settings
-from reposentry.models.repository import Repository
+from reposentry.models.health_report import RepositoryHealthReport
+from reposentry.models.scan import RepositoryScan
+from reposentry.services.health import RepositoryHealthAnalyzer
+from reposentry.services.scanner import RepositoryScanner
 
 app = typer.Typer(
     name="reposentry",
@@ -33,8 +36,13 @@ def parse_repository(value: str) -> tuple[str, str]:
     return parts[0], parts[1]
 
 
-def display_repository(repository: Repository) -> None:
-    """Display repository information in a terminal table."""
+def display_scan(
+    scan: RepositoryScan,
+    health_report: RepositoryHealthReport,
+) -> None:
+    """Display repository scan information."""
+
+    repository = scan.repository
 
     table = Table(
         title=f"Repository: {repository.full_name}",
@@ -44,7 +52,14 @@ def display_repository(repository: Repository) -> None:
     table.add_column("Property")
     table.add_column("Value")
 
-    table.add_row("Name", repository.name)
+    table.add_row(
+        "Health score",
+        f"{health_report.score}/100",
+    )
+    table.add_row(
+        "Name",
+        repository.name,
+    )
     table.add_row(
         "Description",
         repository.description or "No description",
@@ -66,6 +81,22 @@ def display_repository(repository: Repository) -> None:
         repository.default_branch,
     )
     table.add_row(
+        "Open issues",
+        str(scan.open_issue_count),
+    )
+    table.add_row(
+        "Stale issues",
+        str(health_report.stale_issue_count),
+    )
+    table.add_row(
+        "Open pull requests",
+        str(scan.open_pull_request_count),
+    )
+    table.add_row(
+        "Stale pull requests",
+        str(health_report.stale_pull_request_count),
+    )
+    table.add_row(
         "Last push",
         repository.pushed_at.isoformat() if repository.pushed_at else "Unknown",
     )
@@ -74,15 +105,18 @@ def display_repository(repository: Repository) -> None:
 
 
 async def scan_repository(repository_name: str) -> None:
-    """Fetch and display a GitHub repository."""
+    """Scan and display a GitHub repository."""
 
     owner, name = parse_repository(repository_name)
 
     settings = Settings()
-    github = GitHubClient(settings)
+    github_client = GitHubClient(settings)
+    scanner = RepositoryScanner(github_client)
+    analyzer = RepositoryHealthAnalyzer()
 
     try:
-        repository = await github.get_repository(owner, name)
+        scan = await scanner.scan(owner, name)
+        health_report = analyzer.analyze(scan)
     except RepositoryNotFoundError as exc:
         console.print(f"[bold red]Error:[/bold red] {exc}")
         raise typer.Exit(code=1) from exc
@@ -90,7 +124,7 @@ async def scan_repository(repository_name: str) -> None:
         console.print(f"[bold red]GitHub error:[/bold red] {exc}")
         raise typer.Exit(code=1) from exc
 
-    display_repository(repository)
+    display_scan(scan, health_report)
 
 
 @app.command()
