@@ -6,8 +6,10 @@ from typer.testing import CliRunner
 
 from reposentry.cli import app, parse_repository
 from reposentry.clients.github import RepositoryNotFoundError
+from reposentry.models.health_report import RepositoryHealthReport
 from reposentry.models.repository import Repository
 from reposentry.models.scan import RepositoryScan
+from reposentry.services.health import RepositoryHealthAnalyzer
 from reposentry.services.scanner import RepositoryScanner
 
 runner = CliRunner()
@@ -69,6 +71,13 @@ def test_scan_command(
         pull_requests=[],
     )
 
+    fake_health_report = RepositoryHealthReport(
+        score=92,
+        stale_issue_count=1,
+        stale_pull_request_count=0,
+        deductions=[],
+    )
+
     async def fake_scan_repository(
         self: RepositoryScanner,
         owner: str,
@@ -76,10 +85,23 @@ def test_scan_command(
     ) -> RepositoryScan:
         return fake_scan
 
+    def fake_analyze(
+        self: RepositoryHealthAnalyzer,
+        scan: RepositoryScan,
+        now: datetime | None = None,
+    ) -> RepositoryHealthReport:
+        return fake_health_report
+
     monkeypatch.setattr(
         RepositoryScanner,
         "scan",
         fake_scan_repository,
+    )
+
+    monkeypatch.setattr(
+        RepositoryHealthAnalyzer,
+        "analyze",
+        fake_analyze,
     )
 
     result = runner.invoke(
@@ -90,9 +112,12 @@ def test_scan_command(
     assert result.exit_code == 0
     assert "EmmaTsak/reposentry" in result.output
     assert "Python" in result.output
+    assert "Health score" in result.output
+    assert "92/100" in result.output
     assert "Open issues" in result.output
+    assert "Stale issues" in result.output
     assert "Open pull requests" in result.output
-    assert "main" in result.output
+    assert "Stale pull requests" in result.output
 
 
 def test_scan_command_repository_not_found(
