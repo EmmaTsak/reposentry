@@ -28,9 +28,7 @@ def parse_repository(value: str) -> tuple[str, str]:
     parts = value.strip().split("/")
 
     if len(parts) != 2 or not all(parts):
-        raise typer.BadParameter(
-            "Repository must use the format 'owner/name'."
-        )
+        raise typer.BadParameter("Repository must use the format 'owner/name'.")
 
     return parts[0], parts[1]
 
@@ -69,9 +67,7 @@ def display_repository(repository: Repository) -> None:
     )
     table.add_row(
         "Last push",
-        repository.pushed_at.isoformat()
-        if repository.pushed_at
-        else "Unknown",
+        repository.pushed_at.isoformat() if repository.pushed_at else "Unknown",
     )
 
     console.print(table)

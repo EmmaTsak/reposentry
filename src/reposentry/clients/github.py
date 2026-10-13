@@ -47,16 +47,13 @@ class GitHubClient:
             response = await client.get(f"/repos/{owner}/{name}")
 
         if response.status_code == 404:
-            raise RepositoryNotFoundError(
-                f"Repository '{owner}/{name}' was not found."
-            )
+            raise RepositoryNotFoundError(f"Repository '{owner}/{name}' was not found.")
 
         try:
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
             raise GitHubClientError(
-                f"GitHub API request failed with status "
-                f"{response.status_code}."
+                f"GitHub API request failed with status {response.status_code}."
             ) from exc
 
         return Repository.model_validate(response.json())

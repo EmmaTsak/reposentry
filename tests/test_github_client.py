@@ -26,9 +26,7 @@ async def test_get_repository() -> None:
         "pushed_at": "2026-08-07T16:00:00Z",
     }
 
-    route = respx.get(
-        "https://api.github.com/repos/EmmaTsak/reposentry"
-    ).mock(
+    route = respx.get("https://api.github.com/repos/EmmaTsak/reposentry").mock(
         return_value=httpx.Response(
             200,
             json=response_data,
@@ -51,9 +49,7 @@ async def test_get_repository() -> None:
 
 @respx.mock
 async def test_repository_not_found() -> None:
-    respx.get(
-        "https://api.github.com/repos/EmmaTsak/missing"
-    ).mock(
+    respx.get("https://api.github.com/repos/EmmaTsak/missing").mock(
         return_value=httpx.Response(
             404,
             json={"message": "Not Found"},
