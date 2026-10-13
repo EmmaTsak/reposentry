@@ -1,6 +1,7 @@
 import httpx
 
 from reposentry.config import Settings
+from reposentry.models.issue import Issue
 from reposentry.models.repository import Repository
 
 
@@ -57,3 +58,39 @@ class GitHubClient:
             ) from exc
 
         return Repository.model_validate(response.json())
+
+    async def get_issues(
+        self,
+        owner: str,
+        name: str,
+    ) -> list[Issue]:
+        """Fetch open issues for a GitHub repository."""
+
+        async with httpx.AsyncClient(
+            base_url=self.settings.github_api_url,
+            headers=self._build_headers(),
+            timeout=self.settings.request_timeout_seconds,
+        ) as client:
+            response = await client.get(
+                f"/repos/{owner}/{name}/issues",
+                params={
+                    "state": "open",
+                    "per_page": 100,
+                },
+            )
+
+        if response.status_code == 404:
+            raise RepositoryNotFoundError(f"Repository '{owner}/{name}' was not found.")
+
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise GitHubClientError(
+                f"GitHub API request failed with status {response.status_code}."
+            ) from exc
+
+        data = response.json()
+
+        return [
+            Issue.model_validate(item) for item in data if "pull_request" not in item
+        ]
