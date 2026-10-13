@@ -7,6 +7,7 @@ from reposentry.models.health_report import (
 from reposentry.models.issue import Issue
 from reposentry.models.pull_request import PullRequest
 from reposentry.models.scan import RepositoryScan
+from reposentry.models.workflow_run import WorkflowRun
 
 
 class RepositoryHealthAnalyzer:
@@ -16,9 +17,11 @@ class RepositoryHealthAnalyzer:
         self,
         stale_issue_days: int = 30,
         stale_pull_request_days: int = 14,
+        recent_workflow_days: int = 7,
     ) -> None:
         self.stale_issue_days = stale_issue_days
         self.stale_pull_request_days = stale_pull_request_days
+        self.recent_workflow_days = recent_workflow_days
 
     def get_stale_issues(
         self,
@@ -48,6 +51,23 @@ class RepositoryHealthAnalyzer:
             if pull_request.updated_at < cutoff
         ]
 
+    def get_recent_failed_workflows(
+        self,
+        scan: RepositoryScan,
+        now: datetime | None = None,
+    ) -> list[WorkflowRun]:
+        """Return recently failed GitHub Actions workflow runs."""
+
+        current_time = now or datetime.now(UTC)
+        cutoff = current_time - timedelta(days=self.recent_workflow_days)
+
+        return [
+            workflow_run
+            for workflow_run in scan.workflow_runs
+            if workflow_run.conclusion == "failure"
+            and workflow_run.created_at >= cutoff
+        ]
+
     def analyze(
         self,
         scan: RepositoryScan,
@@ -63,6 +83,11 @@ class RepositoryHealthAnalyzer:
         )
 
         stale_pull_requests = self.get_stale_pull_requests(
+            scan,
+            now=current_time,
+        )
+
+        failed_workflows = self.get_recent_failed_workflows(
             scan,
             now=current_time,
         )
@@ -88,6 +113,21 @@ class RepositoryHealthAnalyzer:
             deductions.append(
                 HealthDeduction(
                     reason=(f"{len(stale_pull_requests)} stale pull request(s)"),
+                    points=points,
+                )
+            )
+
+        if failed_workflows:
+            points = min(
+                len(failed_workflows) * 10,
+                30,
+            )
+
+            score -= points
+
+            deductions.append(
+                HealthDeduction(
+                    reason=(f"{len(failed_workflows)} recent failed workflow run(s)"),
                     points=points,
                 )
             )
@@ -121,5 +161,6 @@ class RepositoryHealthAnalyzer:
             score=score,
             stale_issue_count=len(stale_issues),
             stale_pull_request_count=len(stale_pull_requests),
+            failed_workflow_count=len(failed_workflows),
             deductions=deductions,
         )

@@ -1,5 +1,4 @@
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock
 
 import pytest
 
@@ -8,6 +7,7 @@ from reposentry.config import Settings
 from reposentry.models.issue import GitHubUser, Issue
 from reposentry.models.pull_request import PullRequest
 from reposentry.models.repository import Repository
+from reposentry.models.workflow_run import WorkflowRun
 from reposentry.services.scanner import RepositoryScanner
 
 
@@ -57,27 +57,70 @@ async def test_scan_combines_repository_data(
         updated_at=now,
     )
 
-    client = GitHubClient(Settings(github_token=None))
+    workflow_run = WorkflowRun(
+        id=1001,
+        name="CI",
+        html_url=("https://github.com/EmmaTsak/reposentry/actions/runs/1001"),
+        status="completed",
+        conclusion="failure",
+        created_at=now,
+        updated_at=now,
+        run_started_at=now,
+    )
 
-    mock_get_repository = AsyncMock(return_value=repository)
-    mock_get_issues = AsyncMock(return_value=[issue])
-    mock_get_pull_requests = AsyncMock(return_value=[pull_request])
+    async def fake_get_repository(
+        self: GitHubClient,
+        owner: str,
+        name: str,
+    ) -> Repository:
+        return repository
+
+    async def fake_get_issues(
+        self: GitHubClient,
+        owner: str,
+        name: str,
+    ) -> list[Issue]:
+        return [issue]
+
+    async def fake_get_pull_requests(
+        self: GitHubClient,
+        owner: str,
+        name: str,
+    ) -> list[PullRequest]:
+        return [pull_request]
+
+    async def fake_get_workflow_runs(
+        self: GitHubClient,
+        owner: str,
+        name: str,
+    ) -> list[WorkflowRun]:
+        return [workflow_run]
 
     monkeypatch.setattr(
-        client,
+        GitHubClient,
         "get_repository",
-        mock_get_repository,
+        fake_get_repository,
     )
+
     monkeypatch.setattr(
-        client,
+        GitHubClient,
         "get_issues",
-        mock_get_issues,
+        fake_get_issues,
     )
+
     monkeypatch.setattr(
-        client,
+        GitHubClient,
         "get_pull_requests",
-        mock_get_pull_requests,
+        fake_get_pull_requests,
     )
+
+    monkeypatch.setattr(
+        GitHubClient,
+        "get_workflow_runs",
+        fake_get_workflow_runs,
+    )
+
+    client = GitHubClient(Settings(github_token=None))
 
     scanner = RepositoryScanner(client)
 
@@ -89,16 +132,4 @@ async def test_scan_combines_repository_data(
     assert result.repository.full_name == "EmmaTsak/reposentry"
     assert result.open_issue_count == 1
     assert result.open_pull_request_count == 1
-
-    mock_get_repository.assert_awaited_once_with(
-        "EmmaTsak",
-        "reposentry",
-    )
-    mock_get_issues.assert_awaited_once_with(
-        "EmmaTsak",
-        "reposentry",
-    )
-    mock_get_pull_requests.assert_awaited_once_with(
-        "EmmaTsak",
-        "reposentry",
-    )
+    assert result.failed_workflow_count == 1

@@ -69,12 +69,14 @@ def test_scan_command(
         repository=repository,
         issues=[],
         pull_requests=[],
+        workflow_runs=[],
     )
 
     fake_health_report = RepositoryHealthReport(
         score=92,
         stale_issue_count=1,
         stale_pull_request_count=0,
+        failed_workflow_count=0,
         deductions=[],
     )
 

@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from reposentry.models.issue import Issue
 from reposentry.models.pull_request import PullRequest
 from reposentry.models.repository import Repository
+from reposentry.models.workflow_run import WorkflowRun
 
 
 class RepositoryScan(BaseModel):
@@ -11,6 +12,7 @@ class RepositoryScan(BaseModel):
     repository: Repository
     issues: list[Issue]
     pull_requests: list[PullRequest]
+    workflow_runs: list[WorkflowRun]
 
     @property
     def open_issue_count(self) -> int:
@@ -23,3 +25,13 @@ class RepositoryScan(BaseModel):
         """Return the number of open pull requests."""
 
         return len(self.pull_requests)
+
+    @property
+    def failed_workflow_count(self) -> int:
+        """Return the number of failed workflow runs."""
+
+        return sum(
+            1
+            for workflow_run in self.workflow_runs
+            if workflow_run.conclusion == "failure"
+        )

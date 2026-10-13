@@ -15,16 +15,23 @@ class RepositoryScanner:
         owner: str,
         name: str,
     ) -> RepositoryScan:
-        """Collect repository, issue, and pull request information."""
+        """Collect repository health data concurrently."""
 
-        repository, issues, pull_requests = await asyncio.gather(
+        (
+            repository,
+            issues,
+            pull_requests,
+            workflow_runs,
+        ) = await asyncio.gather(
             self.github_client.get_repository(owner, name),
             self.github_client.get_issues(owner, name),
             self.github_client.get_pull_requests(owner, name),
+            self.github_client.get_workflow_runs(owner, name),
         )
 
         return RepositoryScan(
             repository=repository,
             issues=issues,
             pull_requests=pull_requests,
+            workflow_runs=workflow_runs,
         )

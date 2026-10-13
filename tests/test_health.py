@@ -4,6 +4,7 @@ from reposentry.models.issue import GitHubUser, Issue
 from reposentry.models.pull_request import PullRequest
 from reposentry.models.repository import Repository
 from reposentry.models.scan import RepositoryScan
+from reposentry.models.workflow_run import WorkflowRun
 from reposentry.services.health import RepositoryHealthAnalyzer
 
 
@@ -82,6 +83,7 @@ def test_detects_stale_issues_and_pull_requests() -> None:
             stale_pull_request,
             recent_pull_request,
         ],
+        workflow_runs=[],
     )
 
     analyzer = RepositoryHealthAnalyzer(
@@ -154,6 +156,7 @@ def test_health_score_includes_explainable_deductions() -> None:
         repository=repository,
         issues=[stale_issue],
         pull_requests=[stale_pull_request],
+        workflow_runs=[],
     )
 
     analyzer = RepositoryHealthAnalyzer(
@@ -170,3 +173,81 @@ def test_health_score_includes_explainable_deductions() -> None:
     assert report.stale_issue_count == 1
     assert report.stale_pull_request_count == 1
     assert len(report.deductions) == 3
+    assert report.failed_workflow_count == 0
+
+
+def test_recent_failed_workflow_reduces_health_score() -> None:
+    now = datetime(2026, 10, 13, tzinfo=UTC)
+
+    repository = Repository(
+        id=123,
+        name="reposentry",
+        full_name="EmmaTsak/reposentry",
+        description="Repository health analyzer",
+        html_url="https://github.com/EmmaTsak/reposentry",
+        language="Python",
+        stargazers_count=5,
+        forks_count=1,
+        default_branch="main",
+        created_at=now - timedelta(days=100),
+        updated_at=now,
+        pushed_at=now,
+    )
+
+    failed_workflow = WorkflowRun(
+        id=1001,
+        name="CI",
+        html_url=("https://github.com/EmmaTsak/reposentry/actions/runs/1001"),
+        status="completed",
+        conclusion="failure",
+        created_at=now - timedelta(days=1),
+        updated_at=now - timedelta(days=1),
+        run_started_at=now - timedelta(days=1),
+    )
+
+    successful_workflow = WorkflowRun(
+        id=1002,
+        name="CI",
+        html_url=("https://github.com/EmmaTsak/reposentry/actions/runs/1002"),
+        status="completed",
+        conclusion="success",
+        created_at=now - timedelta(days=1),
+        updated_at=now - timedelta(days=1),
+        run_started_at=now - timedelta(days=1),
+    )
+
+    old_failed_workflow = WorkflowRun(
+        id=1003,
+        name="CI",
+        html_url=("https://github.com/EmmaTsak/reposentry/actions/runs/1003"),
+        status="completed",
+        conclusion="failure",
+        created_at=now - timedelta(days=20),
+        updated_at=now - timedelta(days=20),
+        run_started_at=now - timedelta(days=20),
+    )
+
+    scan = RepositoryScan(
+        repository=repository,
+        issues=[],
+        pull_requests=[],
+        workflow_runs=[
+            failed_workflow,
+            successful_workflow,
+            old_failed_workflow,
+        ],
+    )
+
+    analyzer = RepositoryHealthAnalyzer(
+        recent_workflow_days=7,
+    )
+
+    report = analyzer.analyze(
+        scan,
+        now=now,
+    )
+
+    assert report.score == 90
+    assert report.failed_workflow_count == 1
+    assert len(report.deductions) == 1
+    assert report.deductions[0].points == 10

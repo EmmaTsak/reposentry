@@ -4,6 +4,7 @@ from reposentry.models.issue import GitHubUser, Issue
 from reposentry.models.pull_request import PullRequest
 from reposentry.models.repository import Repository
 from reposentry.models.scan import RepositoryScan
+from reposentry.models.workflow_run import WorkflowRun
 
 
 def test_repository_scan_counts_items() -> None:
@@ -50,11 +51,24 @@ def test_repository_scan_counts_items() -> None:
         updated_at=now,
     )
 
+    workflow_run = WorkflowRun(
+        id=1001,
+        name="CI",
+        html_url="https://github.com/EmmaTsak/reposentry/actions/runs/1001",
+        status="completed",
+        conclusion="failure",
+        created_at=now,
+        updated_at=now,
+        run_started_at=now,
+    )
+
     scan = RepositoryScan(
         repository=repository,
         issues=[issue],
         pull_requests=[pull_request],
+        workflow_runs=[workflow_run],
     )
 
     assert scan.open_issue_count == 1
     assert scan.open_pull_request_count == 1
+    assert scan.failed_workflow_count == 1

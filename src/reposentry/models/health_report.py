@@ -14,4 +14,5 @@ class RepositoryHealthReport(BaseModel):
     score: int
     stale_issue_count: int
     stale_pull_request_count: int
+    failed_workflow_count: int
     deductions: list[HealthDeduction]
