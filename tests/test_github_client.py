@@ -230,3 +230,91 @@ async def test_get_pull_requests_repository_not_found() -> None:
             "EmmaTsak",
             "missing",
         )
+
+
+@respx.mock
+async def test_get_workflow_runs() -> None:
+    response_data = {
+        "total_count": 2,
+        "workflow_runs": [
+            {
+                "id": 1001,
+                "name": "CI",
+                "html_url": (
+                    "https://github.com/EmmaTsak/reposentry/actions/runs/1001"
+                ),
+                "status": "completed",
+                "conclusion": "success",
+                "created_at": "2026-10-12T10:00:00Z",
+                "updated_at": "2026-10-12T10:05:00Z",
+                "run_started_at": "2026-10-12T10:01:00Z",
+            },
+            {
+                "id": 1002,
+                "name": "Tests",
+                "html_url": (
+                    "https://github.com/EmmaTsak/reposentry/actions/runs/1002"
+                ),
+                "status": "completed",
+                "conclusion": "failure",
+                "created_at": "2026-10-13T08:00:00Z",
+                "updated_at": "2026-10-13T08:04:00Z",
+                "run_started_at": "2026-10-13T08:01:00Z",
+            },
+        ],
+    }
+
+    respx.get(
+        "https://api.github.com/repos/EmmaTsak/reposentry/actions/runs",
+        params={
+            "per_page": 100,
+        },
+    ).mock(
+        return_value=httpx.Response(
+            200,
+            json=response_data,
+        )
+    )
+
+    settings = Settings(github_token=None)
+    client = GitHubClient(settings)
+
+    workflow_runs = await client.get_workflow_runs(
+        "EmmaTsak",
+        "reposentry",
+    )
+
+    assert len(workflow_runs) == 2
+
+    assert workflow_runs[0].name == "CI"
+    assert workflow_runs[0].conclusion == "success"
+
+    assert workflow_runs[1].name == "Tests"
+    assert workflow_runs[1].conclusion == "failure"
+
+
+@respx.mock
+async def test_get_workflow_runs_repository_not_found() -> None:
+    respx.get(
+        "https://api.github.com/repos/EmmaTsak/missing/actions/runs",
+        params={
+            "per_page": 100,
+        },
+    ).mock(
+        return_value=httpx.Response(
+            404,
+            json={"message": "Not Found"},
+        )
+    )
+
+    settings = Settings(github_token=None)
+    client = GitHubClient(settings)
+
+    with pytest.raises(
+        RepositoryNotFoundError,
+        match="EmmaTsak/missing",
+    ):
+        await client.get_workflow_runs(
+            "EmmaTsak",
+            "missing",
+        )

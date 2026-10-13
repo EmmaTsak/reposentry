@@ -4,6 +4,7 @@ from reposentry.config import Settings
 from reposentry.models.issue import Issue
 from reposentry.models.pull_request import PullRequest
 from reposentry.models.repository import Repository
+from reposentry.models.workflow_run import WorkflowRun
 
 
 class GitHubClientError(Exception):
@@ -127,3 +128,36 @@ class GitHubClient:
             ) from exc
 
         return [PullRequest.model_validate(item) for item in response.json()]
+
+    async def get_workflow_runs(
+        self,
+        owner: str,
+        name: str,
+    ) -> list[WorkflowRun]:
+        """Fetch recent GitHub Actions workflow runs."""
+
+        async with httpx.AsyncClient(
+            base_url=self.settings.github_api_url,
+            headers=self._build_headers(),
+            timeout=self.settings.request_timeout_seconds,
+        ) as client:
+            response = await client.get(
+                f"/repos/{owner}/{name}/actions/runs",
+                params={
+                    "per_page": 100,
+                },
+            )
+
+        if response.status_code == 404:
+            raise RepositoryNotFoundError(f"Repository '{owner}/{name}' was not found.")
+
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise GitHubClientError(
+                f"GitHub API request failed with status {response.status_code}."
+            ) from exc
+
+        data = response.json()
+
+        return [WorkflowRun.model_validate(item) for item in data["workflow_runs"]]
